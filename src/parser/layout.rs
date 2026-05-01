@@ -493,45 +493,38 @@ impl<'a> LayoutAnalyzer<'a> {
                 "ET" => {
                     in_text_block = false;
                 }
-                "Tf" => {
-                    if op.operands.len() >= 2 {
-                        if let PdfValue::Name(font_name) = &op.operands[0] {
-                            current_font_name = font_name.clone();
-                            if let Some(info) = fonts.get(font_name.as_slice()) {
-                                current_font = info.name.clone();
-                            } else {
-                                current_font =
-                                    String::from_utf8_lossy(font_name.as_slice()).to_string();
-                            }
+                "Tf" if op.operands.len() >= 2 => {
+                    if let PdfValue::Name(font_name) = &op.operands[0] {
+                        current_font_name = font_name.clone();
+                        if let Some(info) = fonts.get(font_name.as_slice()) {
+                            current_font = info.name.clone();
+                        } else {
+                            current_font =
+                                String::from_utf8_lossy(font_name.as_slice()).to_string();
                         }
-                        current_font_size = get_number_from_value(&op.operands[1]).unwrap_or(12.0);
                     }
+                    current_font_size = get_number_from_value(&op.operands[1]).unwrap_or(12.0);
                 }
-                "Td" | "TD" => {
-                    if op.operands.len() >= 2 {
-                        let tx = get_number_from_value(&op.operands[0]).unwrap_or(0.0);
-                        let ty = get_number_from_value(&op.operands[1]).unwrap_or(0.0);
-                        text_matrix.translate(tx, ty);
-                    }
+                "Td" | "TD" if op.operands.len() >= 2 => {
+                    let tx = get_number_from_value(&op.operands[0]).unwrap_or(0.0);
+                    let ty = get_number_from_value(&op.operands[1]).unwrap_or(0.0);
+                    text_matrix.translate(tx, ty);
                 }
-                "Tm" => {
-                    if op.operands.len() >= 6 {
-                        text_matrix.set(
-                            get_number_from_value(&op.operands[0]).unwrap_or(1.0),
-                            get_number_from_value(&op.operands[1]).unwrap_or(0.0),
-                            get_number_from_value(&op.operands[2]).unwrap_or(0.0),
-                            get_number_from_value(&op.operands[3]).unwrap_or(1.0),
-                            get_number_from_value(&op.operands[4]).unwrap_or(0.0),
-                            get_number_from_value(&op.operands[5]).unwrap_or(0.0),
-                        );
-                    }
+                "Tm" if op.operands.len() >= 6 => {
+                    text_matrix.set(
+                        get_number_from_value(&op.operands[0]).unwrap_or(1.0),
+                        get_number_from_value(&op.operands[1]).unwrap_or(0.0),
+                        get_number_from_value(&op.operands[2]).unwrap_or(0.0),
+                        get_number_from_value(&op.operands[3]).unwrap_or(1.0),
+                        get_number_from_value(&op.operands[4]).unwrap_or(0.0),
+                        get_number_from_value(&op.operands[5]).unwrap_or(0.0),
+                    );
                 }
                 "T*" => {
                     text_matrix.next_line();
                 }
-                "Tj" | "TJ" => {
-                    if in_text_block {
-                        let text = if op.operator == "TJ" {
+                "Tj" | "TJ" if in_text_block => {
+                    let text = if op.operator == "TJ" {
                             // TJ: array of strings and positioning adjustments
                             // Numbers indicate kerning/spacing adjustments in 1/1000 text space units
                             // Large negative values (like -200 to -300) often indicate word spaces
@@ -571,17 +564,16 @@ impl<'a> LayoutAnalyzer<'a> {
                             }
                         };
 
-                        if !text.trim().is_empty() {
-                            let (x, y) = text_matrix.get_position();
-                            let effective_size = current_font_size * text_matrix.get_scale();
-                            spans.push(TextSpan::new(
-                                text,
-                                x,
-                                y,
-                                effective_size,
-                                current_font.clone(),
-                            ));
-                        }
+                    if !text.trim().is_empty() {
+                        let (x, y) = text_matrix.get_position();
+                        let effective_size = current_font_size * text_matrix.get_scale();
+                        spans.push(TextSpan::new(
+                            text,
+                            x,
+                            y,
+                            effective_size,
+                            current_font.clone(),
+                        ));
                     }
                 }
                 "'" | "\"" => {

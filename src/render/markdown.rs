@@ -6,7 +6,9 @@ use crate::model::{
     Table, TextRun, TextStyle,
 };
 
-use super::{CleanupPipeline, ExtractionStats, RenderOptions, RenderResult, TableFallback};
+use super::{
+    CleanupPipeline, ExtractionStats, PageMarkerStyle, RenderOptions, RenderResult, TableFallback,
+};
 
 /// Convert a document to Markdown.
 pub fn to_markdown(doc: &Document, options: &RenderOptions) -> Result<String> {
@@ -93,6 +95,12 @@ impl MarkdownRenderer {
     }
 
     fn render_page(&mut self, output: &mut String, page: &Page) {
+        if self.options.page_markers == PageMarkerStyle::Comment {
+            if !output.is_empty() && !output.ends_with("\n\n") {
+                output.push('\n');
+            }
+            output.push_str(&format!("<!-- page {} -->\n\n", page.number));
+        }
         if self.options.collect_stats {
             self.stats.add_page();
         }
@@ -127,7 +135,6 @@ impl MarkdownRenderer {
                 output.push_str("\n---\n\n");
             }
             Block::PageBreak | Block::SectionBreak => {
-                // Optionally add page break marker
                 if !output.ends_with("\n\n") {
                     output.push_str("\n\n");
                 }
@@ -478,5 +485,142 @@ mod tests {
         let result = to_markdown(&doc, &options).unwrap();
         assert!(result.contains("---"));
         assert!(result.contains("title:"));
+    }
+
+    #[test]
+    fn test_page_markers_comment_inserted() {
+        let mut doc = Document::new();
+        let mut page1 = Page::letter(1);
+        page1.add_paragraph(Paragraph::with_text("First page content"));
+        doc.add_page(page1);
+        let mut page2 = Page::letter(2);
+        page2.add_paragraph(Paragraph::with_text("Second page content"));
+        doc.add_page(page2);
+
+        let options = RenderOptions::new().with_page_markers(PageMarkerStyle::Comment);
+        let result = to_markdown(&doc, &options).unwrap();
+        assert!(
+            result.contains("<!-- page 1 -->"),
+            "marker for page 1 missing in:\n{}",
+            result
+        );
+        assert!(
+            result.contains("<!-- page 2 -->"),
+            "marker for page 2 missing in:\n{}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_page_markers_none_by_default() {
+        let mut doc = Document::new();
+        let mut page = Page::letter(1);
+        page.add_paragraph(Paragraph::with_text("Content"));
+        doc.add_page(page);
+
+        let options = RenderOptions::new();
+        let result = to_markdown(&doc, &options).unwrap();
+        assert!(
+            !result.contains("<!-- page "),
+            "unexpected page marker in output:\n{}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_page_markers_precede_content() {
+        let mut doc = Document::new();
+        let mut page = Page::letter(1);
+        page.add_paragraph(Paragraph::heading("Chapter 1", 1));
+        doc.add_page(page);
+
+        let options = RenderOptions::new().with_page_markers(PageMarkerStyle::Comment);
+        let result = to_markdown(&doc, &options).unwrap();
+        let marker_pos = result.find("<!-- page 1 -->").expect("marker missing");
+        let heading_pos = result.find("# Chapter 1").expect("heading missing");
+        assert!(marker_pos < heading_pos, "marker must precede page content");
+    }
+
+    #[test]
+    fn test_page_markers_survive_cleanup() {
+        use crate::render::{CleanupOptions, CleanupPreset};
+        let mut doc = Document::new();
+        let mut page = Page::letter(1);
+        page.add_paragraph(Paragraph::with_text("Content"));
+        doc.add_page(page);
+
+        for preset in [
+            CleanupPreset::Minimal,
+            CleanupPreset::Standard,
+            CleanupPreset::Aggressive,
+        ] {
+            let options = RenderOptions::new()
+                .with_page_markers(PageMarkerStyle::Comment)
+                .with_cleanup(CleanupOptions::from_preset(preset));
+            let result = to_markdown(&doc, &options).unwrap();
+            assert!(
+                result.contains("<!-- page 1 -->"),
+                "marker stripped by {:?} cleanup preset",
+                preset
+            );
+        }
+    }
+
+    #[test]
+    fn test_page_markers_respect_page_selection() {
+        let mut doc = Document::new();
+        for i in 1..=3u32 {
+            let mut page = Page::letter(i);
+            page.add_paragraph(Paragraph::with_text(&format!("Page {}", i)));
+            doc.add_page(page);
+        }
+
+        // Only render page 2
+        let options = RenderOptions::new()
+            .with_page_markers(PageMarkerStyle::Comment)
+            .with_page_list(vec![2]);
+        let result = to_markdown(&doc, &options).unwrap();
+
+        assert!(
+            !result.contains("<!-- page 1 -->"),
+            "page 1 marker must be absent when filtered"
+        );
+        assert!(
+            result.contains("<!-- page 2 -->"),
+            "page 2 marker must be present"
+        );
+        assert!(
+            !result.contains("<!-- page 3 -->"),
+            "page 3 marker must be absent when filtered"
+        );
+    }
+
+    #[test]
+    fn test_page_markers_after_frontmatter() {
+        let mut doc = Document::new();
+        doc.metadata.title = Some("Test".to_string());
+        let mut page = Page::letter(1);
+        page.add_paragraph(Paragraph::with_text("Content"));
+        doc.add_page(page);
+
+        let options = RenderOptions::new()
+            .with_frontmatter(true)
+            .with_page_markers(PageMarkerStyle::Comment);
+        let result = to_markdown(&doc, &options).unwrap();
+        assert!(
+            result.contains("<!-- page 1 -->"),
+            "marker missing:\n{}",
+            result
+        );
+        // marker must appear after frontmatter closing ---
+        let second_dashes = result
+            .find("---")
+            .and_then(|i| result[i + 3..].find("---").map(|j| i + 3 + j + 3))
+            .expect("frontmatter not found");
+        let marker_pos = result.find("<!-- page 1 -->").expect("marker not found");
+        assert!(
+            marker_pos > second_dashes,
+            "marker must appear after frontmatter"
+        );
     }
 }

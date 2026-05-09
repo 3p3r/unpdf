@@ -55,8 +55,8 @@ pub use model::{
 };
 pub use parser::{PageStreamOptions, ParseEvent, ParseOptions, PdfParser};
 pub use render::{
-    CleanupOptions, CleanupPreset, HeadingConfig, JsonFormat, PageSelection, RenderOptions,
-    TableFallback,
+    CleanupOptions, CleanupPreset, HeadingConfig, JsonFormat, PageMarkerStyle, PageSelection,
+    RenderOptions, TableFallback,
 };
 
 use std::io::Read;

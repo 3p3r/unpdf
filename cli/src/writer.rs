@@ -3,7 +3,7 @@ use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use unpdf::model::{Metadata, Page};
-use unpdf::render::{CleanupPipeline, RenderOptions, StreamingRenderer};
+use unpdf::render::{CleanupPipeline, PageMarkerStyle, RenderOptions, StreamingRenderer};
 
 /// Output format selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -30,6 +30,9 @@ pub struct MultiFormatWriter {
     images_dir: Option<PathBuf>,
     images_created: bool,
     image_count: u32,
+    /// Tracks whether any content has been written to the MD file.
+    /// Used to determine correct page marker spacing.
+    md_written: bool,
 }
 
 impl MultiFormatWriter {
@@ -66,6 +69,7 @@ impl MultiFormatWriter {
             images_dir,
             images_created: false,
             image_count: 0,
+            md_written: false,
         })
     }
 
@@ -102,6 +106,7 @@ impl MultiFormatWriter {
         if let Some(w) = self.md.as_mut() {
             if self.render_opts.include_frontmatter {
                 w.write_all(metadata.to_yaml_frontmatter().as_bytes())?;
+                self.md_written = true;
             }
         }
         if let Some(w) = self.json.as_mut() {
@@ -120,12 +125,22 @@ impl MultiFormatWriter {
         self.flush_page_images(page)?;
 
         if let Some(w) = self.md.as_mut() {
+            if self.render_opts.page_markers == PageMarkerStyle::Comment {
+                let marker = if self.md_written {
+                    format!("\n<!-- page {} -->\n\n", page.number)
+                } else {
+                    format!("<!-- page {} -->\n\n", page.number)
+                };
+                w.write_all(marker.as_bytes())?;
+                self.md_written = true;
+            }
             let placeholder = unpdf::model::Document::new();
             let renderer = StreamingRenderer::new(&placeholder, self.render_opts.clone());
             for block in &page.elements {
                 let chunk = renderer.render_block_public(block);
                 if !chunk.is_empty() {
                     w.write_all(chunk.as_bytes())?;
+                    self.md_written = true;
                 }
             }
         }
@@ -180,4 +195,82 @@ impl MultiFormatWriter {
 
 fn io_err(e: serde_json::Error) -> std::io::Error {
     std::io::Error::new(std::io::ErrorKind::Other, e)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use unpdf::model::{Page, Paragraph};
+    use unpdf::render::PageMarkerStyle;
+
+    #[test]
+    fn test_streaming_writer_inserts_page_marker() {
+        let tmp = std::env::temp_dir().join("unpdf_writer_marker_test");
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        let doc = unpdf::model::Document::new();
+        let render_opts = RenderOptions::new()
+            .with_page_markers(PageMarkerStyle::Comment)
+            .with_cleanup(unpdf::render::CleanupOptions::from_preset(
+                unpdf::CleanupPreset::Minimal,
+            ));
+        let formats = vec![OutputFormat::Markdown];
+        let mut mfw = MultiFormatWriter::new(&tmp, &formats, render_opts, None).unwrap();
+
+        mfw.write_document_start(&doc.metadata, 2).unwrap();
+
+        let mut page1 = Page::letter(1);
+        page1.add_paragraph(Paragraph::with_text("Page one text"));
+        mfw.write_page(&page1).unwrap();
+
+        let mut page2 = Page::letter(2);
+        page2.add_paragraph(Paragraph::with_text("Page two text"));
+        mfw.write_page(&page2).unwrap();
+
+        mfw.finish().unwrap();
+
+        let content = std::fs::read_to_string(tmp.join("extract.md")).unwrap();
+        assert!(
+            content.contains("<!-- page 1 -->"),
+            "page 1 marker missing:\n{}",
+            content
+        );
+        assert!(
+            content.contains("<!-- page 2 -->"),
+            "page 2 marker missing:\n{}",
+            content
+        );
+
+        let p1_pos = content.find("<!-- page 1 -->").unwrap();
+        let p2_pos = content.find("<!-- page 2 -->").unwrap();
+        assert!(p1_pos < p2_pos, "page 1 marker must precede page 2 marker");
+
+        std::fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[test]
+    fn test_streaming_writer_no_marker_by_default() {
+        let tmp = std::env::temp_dir().join("unpdf_writer_no_marker_test");
+        std::fs::create_dir_all(&tmp).unwrap();
+
+        let doc = unpdf::model::Document::new();
+        let render_opts = RenderOptions::new();
+        let formats = vec![OutputFormat::Markdown];
+        let mut mfw = MultiFormatWriter::new(&tmp, &formats, render_opts, None).unwrap();
+
+        mfw.write_document_start(&doc.metadata, 1).unwrap();
+        let mut page = Page::letter(1);
+        page.add_paragraph(Paragraph::with_text("Content"));
+        mfw.write_page(&page).unwrap();
+        mfw.finish().unwrap();
+
+        let content = std::fs::read_to_string(tmp.join("extract.md")).unwrap();
+        assert!(
+            !content.contains("<!-- page "),
+            "unexpected marker:\n{}",
+            content
+        );
+
+        std::fs::remove_dir_all(&tmp).ok();
+    }
 }

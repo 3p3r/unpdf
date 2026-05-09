@@ -566,8 +566,7 @@ fn cmd_markdown(
         .with_pages(page_selection);
 
     if page_markers {
-        render_options = render_options
-            .with_page_markers(unpdf::PageMarkerStyle::Comment);
+        render_options = render_options.with_page_markers(unpdf::PageMarkerStyle::Comment);
     }
 
     if let Some(level) = cleanup {

@@ -6,7 +6,9 @@ use crate::model::{
     Table, TextRun, TextStyle,
 };
 
-use super::{CleanupPipeline, ExtractionStats, PageMarkerStyle, RenderOptions, RenderResult, TableFallback};
+use super::{
+    CleanupPipeline, ExtractionStats, PageMarkerStyle, RenderOptions, RenderResult, TableFallback,
+};
 
 /// Convert a document to Markdown.
 pub fn to_markdown(doc: &Document, options: &RenderOptions) -> Result<String> {
@@ -497,8 +499,16 @@ mod tests {
 
         let options = RenderOptions::new().with_page_markers(PageMarkerStyle::Comment);
         let result = to_markdown(&doc, &options).unwrap();
-        assert!(result.contains("<!-- page 1 -->"), "marker for page 1 missing in:\n{}", result);
-        assert!(result.contains("<!-- page 2 -->"), "marker for page 2 missing in:\n{}", result);
+        assert!(
+            result.contains("<!-- page 1 -->"),
+            "marker for page 1 missing in:\n{}",
+            result
+        );
+        assert!(
+            result.contains("<!-- page 2 -->"),
+            "marker for page 2 missing in:\n{}",
+            result
+        );
     }
 
     #[test]
@@ -510,7 +520,11 @@ mod tests {
 
         let options = RenderOptions::new();
         let result = to_markdown(&doc, &options).unwrap();
-        assert!(!result.contains("<!-- page "), "unexpected page marker in output:\n{}", result);
+        assert!(
+            !result.contains("<!-- page "),
+            "unexpected page marker in output:\n{}",
+            result
+        );
     }
 
     #[test]
@@ -535,14 +549,19 @@ mod tests {
         page.add_paragraph(Paragraph::with_text("Content"));
         doc.add_page(page);
 
-        for preset in [CleanupPreset::Minimal, CleanupPreset::Standard, CleanupPreset::Aggressive] {
+        for preset in [
+            CleanupPreset::Minimal,
+            CleanupPreset::Standard,
+            CleanupPreset::Aggressive,
+        ] {
             let options = RenderOptions::new()
                 .with_page_markers(PageMarkerStyle::Comment)
                 .with_cleanup(CleanupOptions::from_preset(preset));
             let result = to_markdown(&doc, &options).unwrap();
             assert!(
                 result.contains("<!-- page 1 -->"),
-                "marker stripped by {:?} cleanup preset", preset
+                "marker stripped by {:?} cleanup preset",
+                preset
             );
         }
     }
@@ -559,10 +578,20 @@ mod tests {
             .with_frontmatter(true)
             .with_page_markers(PageMarkerStyle::Comment);
         let result = to_markdown(&doc, &options).unwrap();
-        assert!(result.contains("<!-- page 1 -->"), "marker missing:\n{}", result);
+        assert!(
+            result.contains("<!-- page 1 -->"),
+            "marker missing:\n{}",
+            result
+        );
         // marker must appear after frontmatter closing ---
-        let second_dashes = result.find("---").and_then(|i| result[i+3..].find("---").map(|j| i + 3 + j + 3)).expect("frontmatter not found");
+        let second_dashes = result
+            .find("---")
+            .and_then(|i| result[i + 3..].find("---").map(|j| i + 3 + j + 3))
+            .expect("frontmatter not found");
         let marker_pos = result.find("<!-- page 1 -->").expect("marker not found");
-        assert!(marker_pos > second_dashes, "marker must appear after frontmatter");
+        assert!(
+            marker_pos > second_dashes,
+            "marker must appear after frontmatter"
+        );
     }
 }

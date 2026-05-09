@@ -125,9 +125,7 @@ impl MultiFormatWriter {
                 // For page 1 without frontmatter, the leading `\n` is trimmed by the cleanup
                 // pipeline (enabled by default). Page 2+ content always ends with `\n\n`,
                 // so the extra `\n` produces clean spacing before cleanup.
-                w.write_all(
-                    format!("\n<!-- page {} -->\n\n", page.number).as_bytes(),
-                )?;
+                w.write_all(format!("\n<!-- page {} -->\n\n", page.number).as_bytes())?;
             }
             let placeholder = unpdf::model::Document::new();
             let renderer = StreamingRenderer::new(&placeholder, self.render_opts.clone());
@@ -224,8 +222,16 @@ mod tests {
         mfw.finish().unwrap();
 
         let content = std::fs::read_to_string(tmp.join("extract.md")).unwrap();
-        assert!(content.contains("<!-- page 1 -->"), "page 1 marker missing:\n{}", content);
-        assert!(content.contains("<!-- page 2 -->"), "page 2 marker missing:\n{}", content);
+        assert!(
+            content.contains("<!-- page 1 -->"),
+            "page 1 marker missing:\n{}",
+            content
+        );
+        assert!(
+            content.contains("<!-- page 2 -->"),
+            "page 2 marker missing:\n{}",
+            content
+        );
 
         let p1_pos = content.find("<!-- page 1 -->").unwrap();
         let p2_pos = content.find("<!-- page 2 -->").unwrap();
@@ -251,7 +257,11 @@ mod tests {
         mfw.finish().unwrap();
 
         let content = std::fs::read_to_string(tmp.join("extract.md")).unwrap();
-        assert!(!content.contains("<!-- page "), "unexpected marker:\n{}", content);
+        assert!(
+            !content.contains("<!-- page "),
+            "unexpected marker:\n{}",
+            content
+        );
 
         std::fs::remove_dir_all(&tmp).ok();
     }

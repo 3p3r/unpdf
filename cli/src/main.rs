@@ -55,6 +55,10 @@ pub struct ConvertArgs {
     #[arg(long, value_name = "N")]
     pub window: Option<usize>,
 
+    /// Insert HTML page boundary markers (<!-- page N -->)
+    #[arg(long)]
+    pub page_markers: bool,
+
     /// Suppress warning messages
     #[arg(short, long)]
     pub quiet: bool,
@@ -121,6 +125,10 @@ enum Commands {
         /// Page range (e.g., "1-10", "1,3,5")
         #[arg(long)]
         pages: Option<String>,
+
+        /// Insert HTML page boundary markers (<!-- page N -->)
+        #[arg(long)]
+        page_markers: bool,
     },
 
     /// Convert PDF to plain text
@@ -286,6 +294,7 @@ fn main() {
             cleanup,
             max_heading,
             pages,
+            page_markers,
         }) => cmd_markdown(
             &input,
             output.as_deref(),
@@ -294,6 +303,7 @@ fn main() {
             cleanup,
             max_heading,
             pages.as_deref(),
+            page_markers,
             quiet,
         ),
         Some(Commands::Text {
@@ -337,6 +347,7 @@ fn main() {
                     image_dir: None,
                     min_image_size: 64,
                     window: None,
+                    page_markers: false,
                     quiet,
                 };
                 cmd_convert(&args)
@@ -425,6 +436,9 @@ fn cmd_convert(args: &ConvertArgs) -> Result<bool, Box<dyn std::error::Error>> {
     }
     if let Some(level) = args.cleanup {
         render_opts = render_opts.with_cleanup_preset(level.into());
+    }
+    if args.page_markers {
+        render_opts = render_opts.with_page_markers(unpdf::PageMarkerStyle::Comment);
     }
 
     // Open parser
@@ -529,6 +543,7 @@ fn cmd_markdown(
     cleanup: Option<CleanupLevel>,
     max_heading: u8,
     pages: Option<&str>,
+    page_markers: bool,
     quiet: bool,
 ) -> Result<bool, Box<dyn std::error::Error>> {
     let page_selection = if let Some(p) = pages {
@@ -549,6 +564,11 @@ fn cmd_markdown(
         .with_table_fallback(table_mode.into())
         .with_max_heading(max_heading)
         .with_pages(page_selection);
+
+    if page_markers {
+        render_options = render_options
+            .with_page_markers(unpdf::PageMarkerStyle::Comment);
+    }
 
     if let Some(level) = cleanup {
         render_options = render_options.with_cleanup_preset(level.into());

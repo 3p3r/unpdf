@@ -1,9 +1,18 @@
+use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::fs::File;
+use std::hash::{Hash, Hasher};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
-use unpdf::model::{Metadata, Page};
+use unpdf::model::{Block, Metadata, Page};
 use unpdf::render::{CleanupPipeline, PageMarkerStyle, RenderOptions, StreamingRenderer};
+
+fn image_hash(data: &[u8]) -> (u64, usize) {
+    let mut h = DefaultHasher::new();
+    data.hash(&mut h);
+    (h.finish(), data.len())
+}
 
 /// Output format selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -30,6 +39,8 @@ pub struct MultiFormatWriter {
     images_dir: Option<PathBuf>,
     images_created: bool,
     image_count: u32,
+    /// (hash, byte_len) → canonical resource_id. 동일 바이트 이미지 중복 방지.
+    image_dedup: HashMap<(u64, usize), String>,
     /// Tracks whether any content has been written to the MD file.
     /// Used to determine correct page marker spacing.
     md_written: bool,
@@ -69,12 +80,16 @@ impl MultiFormatWriter {
             images_dir,
             images_created: false,
             image_count: 0,
+            image_dedup: HashMap::new(),
             md_written: false,
         })
     }
 
     /// 페이지별 이미지를 디스크로 flush. 첫 이미지가 있을 때 디렉토리 생성.
-    fn flush_page_images(&mut self, page: &Page) -> std::io::Result<()> {
+    ///
+    /// 동일 바이트 이미지는 첫 등장 시에만 저장되며, 이후 등장분은 page의
+    /// images 목록과 Block::Image resource_id 가 모두 canonical ID로 교체된다.
+    fn flush_page_images(&mut self, page: &mut Page) -> std::io::Result<()> {
         let Some(dir) = self.images_dir.clone() else {
             return Ok(());
         };
@@ -85,11 +100,37 @@ impl MultiFormatWriter {
             std::fs::create_dir_all(&dir)?;
             self.images_created = true;
         }
+
+        // duplicate_id → canonical_id
+        let mut redirects: HashMap<String, String> = HashMap::new();
+
         for (id, resource) in &page.images {
-            let path = dir.join(id);
-            std::fs::write(&path, &resource.data)?;
-            self.image_count += 1;
+            let key = image_hash(&resource.data);
+            match self.image_dedup.entry(key) {
+                std::collections::hash_map::Entry::Occupied(e) => {
+                    redirects.insert(id.clone(), e.get().clone());
+                }
+                std::collections::hash_map::Entry::Vacant(e) => {
+                    std::fs::write(dir.join(id), &resource.data)?;
+                    self.image_count += 1;
+                    e.insert(id.clone());
+                }
+            }
         }
+
+        if redirects.is_empty() {
+            return Ok(());
+        }
+
+        page.images.retain(|(id, _)| !redirects.contains_key(id));
+        for block in &mut page.elements {
+            if let Block::Image { resource_id, .. } = block {
+                if let Some(canonical) = redirects.get(resource_id.as_str()) {
+                    *resource_id = canonical.clone();
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -119,9 +160,9 @@ impl MultiFormatWriter {
         Ok(())
     }
 
-    pub fn write_page(&mut self, page: &Page) -> std::io::Result<()> {
+    pub fn write_page(&mut self, page: &mut Page) -> std::io::Result<()> {
         // 이미지 먼저 flush — MD 의 `![](images/X.jpg)` 참조가 가리키는 파일이
-        // 존재하도록 순서 보장.
+        // 존재하도록 순서 보장. 중복 이미지 dedup도 여기서 처리됨.
         self.flush_page_images(page)?;
 
         if let Some(w) = self.md.as_mut() {
@@ -221,11 +262,11 @@ mod tests {
 
         let mut page1 = Page::letter(1);
         page1.add_paragraph(Paragraph::with_text("Page one text"));
-        mfw.write_page(&page1).unwrap();
+        mfw.write_page(&mut page1).unwrap();
 
         let mut page2 = Page::letter(2);
         page2.add_paragraph(Paragraph::with_text("Page two text"));
-        mfw.write_page(&page2).unwrap();
+        mfw.write_page(&mut page2).unwrap();
 
         mfw.finish().unwrap();
 
@@ -261,7 +302,7 @@ mod tests {
         mfw.write_document_start(&doc.metadata, 1).unwrap();
         let mut page = Page::letter(1);
         page.add_paragraph(Paragraph::with_text("Content"));
-        mfw.write_page(&page).unwrap();
+        mfw.write_page(&mut page).unwrap();
         mfw.finish().unwrap();
 
         let content = std::fs::read_to_string(tmp.join("extract.md")).unwrap();
@@ -269,6 +310,71 @@ mod tests {
             !content.contains("<!-- page "),
             "unexpected marker:\n{}",
             content
+        );
+
+        std::fs::remove_dir_all(&tmp).ok();
+    }
+
+    #[test]
+    fn test_duplicate_images_written_once() {
+        use unpdf::model::{Block, Resource};
+
+        let tmp = std::env::temp_dir().join("unpdf_writer_dedup_test");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let images_dir = tmp.join("images");
+
+        let image_bytes: Vec<u8> = vec![0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4]; // fake JPEG magic
+        let make_resource = || {
+            Resource::new(
+                image_bytes.clone(),
+                "image/jpeg".to_string(),
+                unpdf::model::ResourceType::Image,
+            )
+        };
+
+        let render_opts = RenderOptions::new();
+        let formats = vec![OutputFormat::Markdown];
+        let mut mfw =
+            MultiFormatWriter::new(&tmp, &formats, render_opts, Some(images_dir.clone())).unwrap();
+
+        let doc = unpdf::model::Document::new();
+        mfw.write_document_start(&doc.metadata, 2).unwrap();
+
+        // 두 페이지에 동일한 바이트의 이미지 각각 삽입
+        let mut page1 = Page::letter(1);
+        let id1 = "page1_Image1.jpg".to_string();
+        page1.images.push((id1.clone(), make_resource()));
+        page1.elements.push(Block::image(id1));
+
+        let mut page2 = Page::letter(2);
+        let id2 = "page2_Image1.jpg".to_string();
+        page2.images.push((id2.clone(), make_resource()));
+        page2.elements.push(Block::image(id2));
+
+        mfw.write_page(&mut page1).unwrap();
+        mfw.write_page(&mut page2).unwrap();
+
+        // finish() 전에 image_count 확인 (finish는 소유권 소비)
+        assert_eq!(mfw.image_count(), 1);
+        mfw.finish().unwrap();
+
+        // 디스크에 이미지 파일이 하나만 존재해야 함
+        let files: Vec<_> = std::fs::read_dir(&images_dir)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .collect();
+        assert_eq!(files.len(), 1, "중복 이미지는 파일 하나만 써야 함: {:?}", files);
+
+        // 두 페이지의 Markdown이 모두 동일한 canonical 경로를 참조해야 함
+        let content = std::fs::read_to_string(tmp.join("extract.md")).unwrap();
+        let image_links: Vec<_> = content
+            .lines()
+            .filter(|l| l.contains("![]("))
+            .collect();
+        assert_eq!(image_links.len(), 2, "이미지 링크가 두 줄이어야 함");
+        assert_eq!(
+            image_links[0], image_links[1],
+            "두 페이지의 이미지 링크가 동일해야 함"
         );
 
         std::fs::remove_dir_all(&tmp).ok();

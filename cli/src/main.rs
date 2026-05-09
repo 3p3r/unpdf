@@ -491,8 +491,8 @@ fn cmd_convert(args: &ConvertArgs) -> Result<bool, Box<dyn std::error::Error>> {
                     return ControlFlow::Break(());
                 }
             }
-            ParseEvent::PageParsed(page) => {
-                if let Err(e) = mfw.write_page(&page) {
+            ParseEvent::PageParsed(mut page) => {
+                if let Err(e) = mfw.write_page(&mut page) {
                     write_err = Some(format!("page {}: {}", page.number, e));
                     return ControlFlow::Break(());
                 }

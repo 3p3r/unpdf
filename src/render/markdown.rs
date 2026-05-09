@@ -510,7 +510,7 @@ mod tests {
 
         let options = RenderOptions::new();
         let result = to_markdown(&doc, &options).unwrap();
-        assert!(!result.contains("<!--"), "unexpected comment marker in output:\n{}", result);
+        assert!(!result.contains("<!-- page "), "unexpected page marker in output:\n{}", result);
     }
 
     #[test]
@@ -545,5 +545,24 @@ mod tests {
                 "marker stripped by {:?} cleanup preset", preset
             );
         }
+    }
+
+    #[test]
+    fn test_page_markers_after_frontmatter() {
+        let mut doc = Document::new();
+        doc.metadata.title = Some("Test".to_string());
+        let mut page = Page::letter(1);
+        page.add_paragraph(Paragraph::with_text("Content"));
+        doc.add_page(page);
+
+        let options = RenderOptions::new()
+            .with_frontmatter(true)
+            .with_page_markers(PageMarkerStyle::Comment);
+        let result = to_markdown(&doc, &options).unwrap();
+        assert!(result.contains("<!-- page 1 -->"), "marker missing:\n{}", result);
+        // marker must appear after frontmatter closing ---
+        let second_dashes = result.find("---").and_then(|i| result[i+3..].find("---").map(|j| i + 3 + j + 3)).expect("frontmatter not found");
+        let marker_pos = result.find("<!-- page 1 -->").expect("marker not found");
+        assert!(marker_pos > second_dashes, "marker must appear after frontmatter");
     }
 }

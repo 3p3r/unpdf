@@ -402,7 +402,9 @@ impl<'a> Iterator for StreamingRenderer<'a> {
                         let page = &self.doc.pages[page_idx];
                         self.current_page_number = page.number;
                         if self.options.page_markers == PageMarkerStyle::Comment {
-                            self.state = StreamState::PageMarker { page_index: page_idx };
+                            self.state = StreamState::PageMarker {
+                                page_index: page_idx,
+                            };
                         } else {
                             self.state = StreamState::InPage {
                                 page_index: page_idx,
@@ -452,7 +454,9 @@ impl<'a> Iterator for StreamingRenderer<'a> {
                         let page = &self.doc.pages[page_idx];
                         self.current_page_number = page.number;
                         if self.options.page_markers == PageMarkerStyle::Comment {
-                            self.state = StreamState::PageMarker { page_index: page_idx };
+                            self.state = StreamState::PageMarker {
+                                page_index: page_idx,
+                            };
                         } else {
                             self.state = StreamState::InPage {
                                 page_index: page_idx,
@@ -640,8 +644,16 @@ mod tests {
         let renderer = StreamingRenderer::new(&doc, options);
         let content = collect_content(renderer);
 
-        assert!(content.contains("<!-- page 1 -->"), "page 1 marker missing:\n{}", content);
-        assert!(content.contains("<!-- page 2 -->"), "page 2 marker missing:\n{}", content);
+        assert!(
+            content.contains("<!-- page 1 -->"),
+            "page 1 marker missing:\n{}",
+            content
+        );
+        assert!(
+            content.contains("<!-- page 2 -->"),
+            "page 2 marker missing:\n{}",
+            content
+        );
         let p1 = content.find("<!-- page 1 -->").unwrap();
         let p2 = content.find("<!-- page 2 -->").unwrap();
         assert!(p1 < p2, "page 1 marker must precede page 2 marker");
@@ -656,6 +668,10 @@ mod tests {
 
         let renderer = StreamingRenderer::new(&doc, RenderOptions::default());
         let content = collect_content(renderer);
-        assert!(!content.contains("<!-- page "), "unexpected marker:\n{}", content);
+        assert!(
+            !content.contains("<!-- page "),
+            "unexpected marker:\n{}",
+            content
+        );
     }
 }

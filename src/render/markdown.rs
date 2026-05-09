@@ -581,9 +581,18 @@ mod tests {
             .with_page_list(vec![2]);
         let result = to_markdown(&doc, &options).unwrap();
 
-        assert!(!result.contains("<!-- page 1 -->"), "page 1 marker must be absent when filtered");
-        assert!(result.contains("<!-- page 2 -->"), "page 2 marker must be present");
-        assert!(!result.contains("<!-- page 3 -->"), "page 3 marker must be absent when filtered");
+        assert!(
+            !result.contains("<!-- page 1 -->"),
+            "page 1 marker must be absent when filtered"
+        );
+        assert!(
+            result.contains("<!-- page 2 -->"),
+            "page 2 marker must be present"
+        );
+        assert!(
+            !result.contains("<!-- page 3 -->"),
+            "page 3 marker must be absent when filtered"
+        );
     }
 
     #[test]

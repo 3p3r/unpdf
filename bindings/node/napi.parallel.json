@@ -1,0 +1,4 @@
+{
+  "binaryName": "unpdf-parallel",
+  "targets": ["wasm32-wasip1-threads"]
+}

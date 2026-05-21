@@ -52,10 +52,15 @@ bindings/node/index.d.ts
 bindings/node/index.js
 bindings/node/browser.js
 bindings/node/unpdf.wasi.cjs
+bindings/node/unpdf-parallel.wasi.cjs
 bindings/node/unpdf.wasi-browser.js
 bindings/node/unpdf.wasi-browser.mjs
+bindings/node/unpdf-parallel.wasi-browser.js
+bindings/node/unpdf-parallel.wasi-browser.mjs
 bindings/node/unpdf.wasm32-wasi.wasm
+bindings/node/unpdf-parallel.wasm32-wasi.wasm
 bindings/node/unpdf.wasm32-wasi.debug.wasm
+bindings/node/unpdf-parallel.wasm32-wasi.debug.wasm
 bindings/node/wasi-worker.mjs
 bindings/node/wasi-worker-browser.mjs
 

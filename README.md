@@ -705,7 +705,7 @@ Complete document structure with metadata:
 | `ffi` | C-ABI foreign function interface | No |
 | `async` | Async I/O with Tokio | No |
 
-Parallel page parsing is enabled on native targets and on `wasm32-wasip1-threads` (the Node/browser wasm build). Plain `wasm32-wasip1` stays sequential.
+Parallel page parsing is enabled on native targets and on `unpdf/parallel`. The default `unpdf` entry (`wasm32-wasip1-threads`, sequential) disables parallel parsing at compile time.
 
 ```toml
 # Cargo.toml - enable features
@@ -715,7 +715,12 @@ unpdf = { version = "0.2", features = ["ffi", "async"] }
 
 ### Node.js / browser
 
-WASI wasm (`wasm32-wasip1-threads`) via [NAPI-RS](https://napi.rs/docs/concepts/webassembly) in `bindings/node` (`rustup target add wasm32-wasip1-threads`, then `npm install && npm run build`). Browsers need COOP/COEP for `SharedArrayBuffer`. No native `.node` addon.
+WASI wasm via [NAPI-RS](https://napi.rs/docs/concepts/webassembly) in `bindings/node` (`rustup target add wasm32-wasip1-threads`, then `npm install && npm run build`). Two wasm artifacts ship together:
+
+- **`unpdf`** (default) — sequential page parsing.
+- **`unpdf/parallel`** — parallel page parsing (COOP/COEP for `SharedArrayBuffer` in browsers).
+
+No native `.node` addon.
 
 ---
 

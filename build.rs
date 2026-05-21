@@ -4,11 +4,16 @@ use std::io::Write;
 use std::path::Path;
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=UNPDF_WASM_SEQUENTIAL");
     println!("cargo:rustc-check-cfg=cfg(unpdf_wasi_threads)");
+    println!("cargo:rustc-check-cfg=cfg(unpdf_wasm_sequential)");
 
     let target = env::var("TARGET").unwrap_or_default();
     if target.contains("wasip1-threads") {
         println!("cargo:rustc-cfg=unpdf_wasi_threads");
+    }
+    if env::var("UNPDF_WASM_SEQUENTIAL").as_deref() == Ok("1") {
+        println!("cargo:rustc-cfg=unpdf_wasm_sequential");
     }
 
     let out_dir = env::var("OUT_DIR").unwrap();

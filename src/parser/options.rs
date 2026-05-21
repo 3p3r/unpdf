@@ -24,7 +24,7 @@ pub struct ParseOptions {
     /// every image. Default 64 — conservative cutoff for technical docs.
     pub min_image_dimension: u32,
 
-    /// Whether to use parallel processing (`wasm32-wasip1-threads` and native; off on plain `wasm32-wasip1`).
+    /// Whether to use parallel processing (native and parallel wasm build; off on sequential wasm).
     pub parallel: bool,
 
     /// Page selection (which pages to parse)
@@ -109,7 +109,8 @@ impl Default for ParseOptions {
             extract_mode: ExtractMode::Full,
             extract_resources: false,
             min_image_dimension: 64,
-            parallel: cfg!(any(not(target_family = "wasm"), unpdf_wasi_threads)),
+            parallel: cfg!(any(not(target_family = "wasm"), unpdf_wasi_threads))
+                && !cfg!(unpdf_wasm_sequential),
             pages: PageSelection::All,
             password: None,
         }
@@ -172,6 +173,7 @@ mod tests {
         assert_eq!(
             options.parallel,
             cfg!(any(not(target_family = "wasm"), unpdf_wasi_threads))
+                && !cfg!(unpdf_wasm_sequential)
         );
         // 0.4.0 breaking: default is now false
         assert!(!options.extract_resources);

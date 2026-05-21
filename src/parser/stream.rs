@@ -61,7 +61,7 @@ pub struct PageStreamOptions {
 }
 
 fn default_parallel() -> bool {
-    cfg!(any(not(target_family = "wasm"), unpdf_wasi_threads))
+    cfg!(any(not(target_family = "wasm"), unpdf_wasi_threads)) && !cfg!(unpdf_wasm_sequential)
 }
 
 fn default_window_size() -> usize {
@@ -424,8 +424,7 @@ where
         }
     }
 
-    // WASI threads: scoped std threads (rayon global pool deadlocks under NAPI wasm workers).
-    #[cfg(unpdf_wasi_threads)]
+    #[cfg(all(unpdf_wasi_threads, not(unpdf_wasm_sequential)))]
     {
         if opts.parallel && targets.len() > 1 {
             let parse_opts_ref = &parse_opts;
@@ -470,7 +469,10 @@ where
         }
     }
 
-    #[cfg(all(target_family = "wasm", not(unpdf_wasi_threads)))]
+    #[cfg(any(
+        all(target_family = "wasm", not(unpdf_wasi_threads)),
+        all(unpdf_wasi_threads, unpdf_wasm_sequential)
+    ))]
     {
         run_sequential();
     }

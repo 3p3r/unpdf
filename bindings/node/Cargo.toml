@@ -1,0 +1,27 @@
+[workspace]
+
+[package]
+name = "unpdf-node"
+version = "0.6.4"
+edition = "2021"
+authors = ["iyulab"]
+license = "MIT"
+description = "Node.js bindings for unpdf (NAPI-RS)"
+repository = "https://github.com/iyulab/unpdf"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = "3"
+napi-derive = "3"
+serde_json = "1.0"
+unpdf = { path = "../..", default-features = true }
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+lto = true
+strip = "symbols"

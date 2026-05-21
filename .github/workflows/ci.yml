@@ -132,3 +132,40 @@ jobs:
       - name: Build FFI library
         run: cargo build --release --features ffi --target ${{ matrix.target }}
 
+  build-node:
+    name: Build Node.js bindings (NAPI-RS)
+    needs: version-check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Cache cargo and npm
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+            bindings/node/target/
+            bindings/node/node_modules/
+          key: ${{ runner.os }}-node-napi-${{ hashFiles('**/Cargo.lock', 'bindings/node/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-napi-
+
+      - name: Build and test bindings/node
+        working-directory: bindings/node
+        run: npm install && npm run build && npm test
+

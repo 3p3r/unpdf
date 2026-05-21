@@ -24,7 +24,7 @@ pub struct ParseOptions {
     /// every image. Default 64 — conservative cutoff for technical docs.
     pub min_image_dimension: u32,
 
-    /// Whether to use parallel processing
+    /// Whether to use parallel processing (native only; always off on `wasm`).
     pub parallel: bool,
 
     /// Page selection (which pages to parse)
@@ -109,7 +109,7 @@ impl Default for ParseOptions {
             extract_mode: ExtractMode::Full,
             extract_resources: false,
             min_image_dimension: 64,
-            parallel: true,
+            parallel: cfg!(not(target_family = "wasm")),
             pages: PageSelection::All,
             password: None,
         }
@@ -169,7 +169,7 @@ mod tests {
     fn test_default_options() {
         let options = ParseOptions::default();
         assert_eq!(options.error_mode, ErrorMode::Lenient);
-        assert!(options.parallel);
+        assert_eq!(options.parallel, cfg!(not(target_family = "wasm")));
         // 0.4.0 breaking: default is now false
         assert!(!options.extract_resources);
     }

@@ -701,14 +701,21 @@ Complete document structure with metadata:
 | Feature | Description | Default |
 |---------|-------------|---------|
 | `default` | Core PDF parsing and rendering | Yes |
+| `fast-parse` | Faster PDF parsing (included in default) | Yes |
 | `ffi` | C-ABI foreign function interface | No |
 | `async` | Async I/O with Tokio | No |
+
+Parallel page parsing is enabled on native targets only (disabled on `wasm`).
 
 ```toml
 # Cargo.toml - enable features
 [dependencies]
 unpdf = { version = "0.2", features = ["ffi", "async"] }
 ```
+
+### Node.js / browser
+
+WASI wasm via [NAPI-RS](https://napi.rs/docs/concepts/webassembly) in `bindings/node` (`npm install && npm run build`). No native `.node` addon.
 
 ---
 

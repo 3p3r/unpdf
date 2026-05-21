@@ -1,0 +1,43 @@
+{
+  "name": "unpdf",
+  "version": "0.6.4",
+  "description": "Node.js and browser bindings for unpdf (WASI wasm)",
+  "main": "unpdf.wasi.cjs",
+  "types": "index.d.ts",
+  "browser": "unpdf.wasi-browser.mjs",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/iyulab/unpdf.git",
+    "directory": "bindings/node"
+  },
+  "keywords": ["pdf", "markdown", "napi-rs", "wasm"],
+  "files": [
+    "index.d.ts",
+    "unpdf.wasi.cjs",
+    "unpdf.wasi-browser.mjs",
+    "unpdf.wasm32-wasi.wasm",
+    "wasi-worker.mjs",
+    "wasi-worker-browser.mjs"
+  ],
+  "napi": {
+    "binaryName": "unpdf",
+    "targets": ["wasm32-wasip1"]
+  },
+  "engines": {
+    "node": ">= 18"
+  },
+  "dependencies": {
+    "@napi-rs/wasm-runtime": "^1.1.4"
+  },
+  "scripts": {
+    "build": "napi build --platform --release -t wasm32-wasip1 && rm -f browser.js index.js && mv -f unpdf.wasi-browser.js unpdf.wasi-browser.mjs",
+    "test": "node --test test/smoke.mjs"
+  },
+  "devDependencies": {
+    "@emnapi/core": "^1.5.0",
+    "@emnapi/runtime": "^1.5.0",
+    "@napi-rs/cli": "^3.2.0",
+    "@tybys/wasm-util": "^0.10.0"
+  }
+}

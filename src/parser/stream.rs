@@ -61,7 +61,7 @@ pub struct PageStreamOptions {
 }
 
 fn default_parallel() -> bool {
-    cfg!(not(target_family = "wasm"))
+    cfg!(any(not(target_family = "wasm"), unpdf_wasi_threads))
 }
 
 fn default_window_size() -> usize {
@@ -69,7 +69,15 @@ fn default_window_size() -> usize {
     {
         rayon::current_num_threads().saturating_mul(2).max(2)
     }
-    #[cfg(target_family = "wasm")]
+    #[cfg(unpdf_wasi_threads)]
+    {
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(2)
+            .saturating_mul(2)
+            .max(2)
+    }
+    #[cfg(all(target_family = "wasm", not(unpdf_wasi_threads)))]
     {
         2
     }
@@ -361,7 +369,7 @@ where
         }
     };
 
-    #[cfg(not(target_family = "wasm"))]
+    #[cfg(all(not(unpdf_wasi_threads), not(target_family = "wasm")))]
     {
         if opts.parallel && targets.len() > 1 {
             // Use unbounded channel: the ReorderBuffer already limits outstanding pages.
@@ -416,7 +424,53 @@ where
         }
     }
 
-    #[cfg(target_family = "wasm")]
+    // WASI threads: scoped std threads (rayon global pool deadlocks under NAPI wasm workers).
+    #[cfg(unpdf_wasi_threads)]
+    {
+        if opts.parallel && targets.len() > 1 {
+            let parse_opts_ref = &parse_opts;
+            let mut results: Vec<(u32, crate::error::Result<Page>)> =
+                Vec::with_capacity(targets.len());
+            std::thread::scope(|s| {
+                let handles: Vec<_> = targets
+                    .iter()
+                    .map(|&page_num| {
+                        s.spawn(move || {
+                            (page_num, parse_single_page(backend, page_num, parse_opts_ref))
+                        })
+                    })
+                    .collect();
+                for handle in handles {
+                    results.push(handle.join().expect("page parse thread panicked"));
+                }
+            });
+            results.sort_unstable_by_key(|(page_num, _)| *page_num);
+            for (page_num, r) in results {
+                let item = match r {
+                    Ok(p) => Ok(p),
+                    Err(e) => {
+                        if opts.error_mode == ErrorMode::Strict {
+                            strict_err = Some(e);
+                            cancelled = true;
+                            break;
+                        }
+                        Err(e)
+                    }
+                };
+                reorder.push(page_num, item);
+                if let ControlFlow::Break(_) =
+                    flush_ready(&mut reorder, &mut quality, &mut progress, &mut on_event)
+                {
+                    cancelled = true;
+                    break;
+                }
+            }
+        } else {
+            run_sequential();
+        }
+    }
+
+    #[cfg(all(target_family = "wasm", not(unpdf_wasi_threads)))]
     {
         run_sequential();
     }

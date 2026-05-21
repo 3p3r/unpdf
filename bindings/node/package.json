@@ -22,7 +22,7 @@
   ],
   "napi": {
     "binaryName": "unpdf",
-    "targets": ["wasm32-wasip1"]
+    "targets": ["wasm32-wasip1-threads"]
   },
   "engines": {
     "node": ">= 18"
@@ -31,7 +31,7 @@
     "@napi-rs/wasm-runtime": "^1.1.4"
   },
   "scripts": {
-    "build": "napi build --platform --release -t wasm32-wasip1 && rm -f browser.js index.js && mv -f unpdf.wasi-browser.js unpdf.wasi-browser.mjs",
+    "build": "napi build --platform --release -t wasm32-wasip1-threads && rm -f browser.js index.js && mv -f unpdf.wasi-browser.js unpdf.wasi-browser.mjs",
     "test": "node --test test/smoke.mjs"
   },
   "devDependencies": {

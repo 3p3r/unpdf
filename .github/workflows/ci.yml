@@ -143,7 +143,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: wasm32-wasip1
+          targets: wasm32-wasip1-threads
 
       - name: Setup Node.js
         uses: actions/setup-node@v4

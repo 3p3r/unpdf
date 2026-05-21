@@ -4,6 +4,13 @@ use std::io::Write;
 use std::path::Path;
 
 fn main() {
+    println!("cargo:rustc-check-cfg=cfg(unpdf_wasi_threads)");
+
+    let target = env::var("TARGET").unwrap_or_default();
+    if target.contains("wasip1-threads") {
+        println!("cargo:rustc-cfg=unpdf_wasi_threads");
+    }
+
     let out_dir = env::var("OUT_DIR").unwrap();
 
     let collections = [
